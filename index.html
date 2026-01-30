@@ -138,7 +138,7 @@
                 </table>
                 
                 <div id="formPendenciasDetalhe" class="sub-form-alert">
-                    <h4>Resumo das Restrições (> R$ 7.500,01)</h4>
+                    <h4>Resumo das Restrições</h4>
                     <p style="font-size: 13px; color: #666; margin-top: -5px;">Liste abaixo todas as pendências que compõem o valor.</p>
                     <table class="restricao-table" id="tabelaRestricoes">
                         <thead><tr><th style="width: 40%;">Fornecedor</th><th style="width: 30%;">Tipo de Restrição</th><th style="width: 20%;">Valor (R$)</th><th style="width: 10%;">Ação</th></tr></thead>
@@ -377,12 +377,20 @@
         const tbody = document.querySelector('#tabelaRestricoes tbody');
         const selAlcada = document.getElementById('selAlcadaPendencias');
 
-        if (inputVal > 7500.01) { detalheDiv.style.display = 'block'; if(tbody.rows.length===0) adicionarLinhaRestricao(); } else { detalheDiv.style.display = 'none'; }
+        // Se > 0 (qualquer valor), mostra o formulário de restrições
+        if (inputVal > 0) { 
+            detalheDiv.style.display = 'block'; 
+            if(tbody.rows.length === 0) adicionarLinhaRestricao(); 
+        } else { 
+            detalheDiv.style.display = 'none'; 
+        }
 
         if (!inputValStr || inputVal === 0) { selAlcada.value = "Aprovado"; selAlcada.disabled = true; return; }
 
         selAlcada.disabled = true; 
-        if (inputVal <= 7500.00) { selAlcada.value = "Aprovado"; }
+        
+        // REGRA DE ALÇADA ATUALIZADA
+        if (inputVal <= 7500.01) { selAlcada.value = "Alçada Regional"; }
         else if (inputVal <= 35000.00) { selAlcada.value = "Gerência Nacional de Negócios"; }
         else if (inputVal <= 70000.00) { selAlcada.value = "Vice - Presidência"; }
         else { selAlcada.value = "Presidência"; }
@@ -404,19 +412,16 @@
         if (dataAbertura <= dataLimite) { selectAlcada.value = "Aprovado"; selectAlcada.disabled = true; } else { selectAlcada.value = "CAPI"; selectAlcada.disabled = true; }
     }
 
-    // NOVA FUNÇÃO: Atualiza as opções do Select removendo "Aprovado" se valor > 0
     function atualizarListaAlcadaTaxas(input, selectId) {
         const val = limparValorMoeda(input.value);
         const select = document.getElementById(selectId);
         const valorAtual = select.value;
 
-        // Limpa opções atuais
         select.innerHTML = ''; 
         
         defaultAlcadas.forEach(alc => { 
-            // REGRA SOLICITADA: Se valor > 0, não adiciona "Aprovado"
             if (val > 0 && alc === "Aprovado") {
-                return; // Pula essa iteração
+                return; 
             }
             let opt = document.createElement('option'); 
             opt.value = alc; 
@@ -424,12 +429,10 @@
             select.appendChild(opt); 
         });
 
-        // Tenta manter a seleção anterior, se ela ainda existir na nova lista
         let optionExists = Array.from(select.options).some(o => o.value === valorAtual);
         if(optionExists) { 
             select.value = valorAtual; 
         } else {
-            // Se a opção anterior sumiu (ex: era Aprovado e agora não pode ser), reseta
             select.value = "Selecione...";
         }
     }
@@ -438,7 +441,6 @@
         const inputIP = document.getElementById('inputTaxaIP');
         const inputFlat = document.getElementById('inputTaxaFlat');
         
-        // Atualiza as listas antes de verificar a defesa
         atualizarListaAlcadaTaxas(inputIP, 'selAlcadaTaxaIP');
         atualizarListaAlcadaTaxas(inputFlat, 'selAlcadaTaxaFlat');
 
@@ -447,7 +449,6 @@
         const divDefesa = document.getElementById('formDefesaTaxas');
         const tituloDefesa = document.getElementById('tituloDefesaTaxas');
         
-        // Verifica o disable/enable padrão
         verificarGenerico(inputIP);
         verificarGenerico(inputFlat);
 
@@ -472,7 +473,6 @@
 
     function populateAlcadas() {
         document.querySelectorAll('.sel-alcada').forEach(select => {
-            // Pula os selects de taxas pois são controlados dinamicamente
             if(select.id === 'selAlcadaTaxaIP' || select.id === 'selAlcadaTaxaFlat') return;
 
             const valorAtual = select.value;
@@ -487,7 +487,6 @@
             if(optionExists) { select.value = valorAtual; }
         });
         
-        // Inicializa também as taxas com a lista completa (assumindo 0,00% inicial)
         const initTaxaIP = document.getElementById('selAlcadaTaxaIP');
         const initTaxaFlat = document.getElementById('selAlcadaTaxaFlat');
         [initTaxaIP, initTaxaFlat].forEach(sel => {
@@ -524,7 +523,6 @@
         const razao = document.getElementById('inpRazao').value;
         const lead = document.getElementById('inpLead').value;
         const estado = document.getElementById('inpEstado').value;
-        // Sub-tipo fixo CAPI
         const subTipoText = "CAPI DE VENDAS";
         
         const produtoFull = document.getElementById('inpProduto').value;
@@ -550,7 +548,6 @@
             return;
         }
 
-        // Gera imagem para o email
         await gerarImagemResumo(true);
         
         const now = new Date();
@@ -599,23 +596,38 @@ Abaixo Checklist da venda:
                 return;
             }
 
-            // Validações CAPI
             const parecer = document.getElementById('observacoesVendas').value || '';
             if(parecer.length < 100) { alert(`ERRO: Parecer de Vendas deve ter no mínimo 100 caracteres.`); return; }
             
             const pendenciasStr = document.getElementById('inputPendencias').value;
             const totalPendencias = limparValorMoeda(pendenciasStr);
-            if (totalPendencias > 7500.01) {
+            
+            // VALIDAÇÃO ATUALIZADA: Se > 0 exige detalhamento E a soma deve bater
+            if (totalPendencias > 0) {
                 let somaRestricoes = 0;
                 let erroCamposTabela = false;
-                document.querySelectorAll('#tabelaRestricoes tbody tr').forEach(row => {
+                const rows = document.querySelectorAll('#tabelaRestricoes tbody tr');
+                
+                if (rows.length === 0) { alert("Adicione pelo menos uma linha de restrição."); return; }
+
+                rows.forEach(row => {
                     const inputs = row.querySelectorAll('input');
+                    const fornecedor = inputs[0].value.trim();
+                    const tipo = inputs[1].value.trim();
                     const val = limparValorMoeda(inputs[2].value);
-                    if (inputs[2].value !== "" && (inputs[0].value.trim() === "" || inputs[1].value.trim() === "")) erroCamposTabela = true;
+                    
+                    if (!fornecedor || !tipo || val <= 0) { erroCamposTabela = true; }
                     somaRestricoes += val;
                 });
-                if (erroCamposTabela) { alert("Preencha Fornecedor e Tipo para as restrições."); return; }
-                if (Math.abs(totalPendencias - somaRestricoes) > 0.01) { alert("Soma das restrições não bate com o total."); return; }
+
+                if (erroCamposTabela) { alert("Preencha Fornecedor, Tipo e Valor para todas as linhas."); return; }
+                
+                // Comparação com margem de segurança para float
+                if (Math.abs(totalPendencias - somaRestricoes) > 0.05) { 
+                    alert(`A soma das restrições (R$ ${somaRestricoes.toFixed(2)}) não bate com o total informado (R$ ${totalPendencias.toFixed(2)}). Ajuste os valores.`); 
+                    return; 
+                }
+
                 const txtDefesa = document.getElementById('textoDefesaRestricao').value.trim();
                 if (!document.getElementById('dataPrimeiraRestricao').value || !document.getElementById('dataUltimaRestricao').value) { alert("Preencha as datas das restrições."); return; }
                 if (txtDefesa.length < 100) { alert("Defesa de restrições deve ter no mínimo 100 caracteres."); return; }
@@ -669,15 +681,32 @@ Abaixo Checklist da venda:
                 });
                 html += `</tbody></table>`;
 
-                if(totalPendencias > 7500.01) {
+                // GERA TABELA NA IMAGEM
+                if(totalPendencias > 0) {
                         const def = document.getElementById('textoDefesaRestricao').value;
                         const dataPrimeira = formatarDataBR(document.getElementById('dataPrimeiraRestricao').value);
                         const dataUltima = formatarDataBR(document.getElementById('dataUltimaRestricao').value);
 
+                        let tableHtml = `<table class="rep-table" style="margin-top:10px; width:100%;">
+                                         <thead><tr><th>Fornecedor</th><th>Tipo</th><th>Valor (R$)</th></tr></thead>
+                                         <tbody>`;
+                        
+                        document.querySelectorAll('#tabelaRestricoes tbody tr').forEach(row => {
+                             const inputs = row.querySelectorAll('input');
+                             tableHtml += `<tr>
+                                <td>${inputs[0].value.toUpperCase()}</td>
+                                <td>${inputs[1].value.toUpperCase()}</td>
+                                <td>${inputs[2].value}</td>
+                             </tr>`;
+                        });
+                        tableHtml += `</tbody></table>`;
+
                         html += `<div style="border: 2px solid #dc3545; padding: 10px; margin-top: 15px; border-radius: 5px; background-color: #fff8f8;">
-                                        <h4 style="color: #dc3545; margin-top: 0; border-bottom: none; margin-bottom: 10px;">⚠️ Detalhamento de Restrições (> R$ 7.500,01)</h4>
+                                        <h4 style="color: #dc3545; margin-top: 0; border-bottom: none; margin-bottom: 10px;">⚠️ Detalhamento de Restrições</h4>
                                         
-                                        <div style="display: flex; gap: 20px; margin-bottom: 10px; font-weight: bold; color: #555;">
+                                        ${tableHtml}
+
+                                        <div style="display: flex; gap: 20px; margin: 10px 0; font-weight: bold; color: #555;">
                                             <div>Data Primeira Restrição: <span style="color: #000;">${dataPrimeira}</span></div>
                                             <div>Data Última Restrição: <span style="color: #000;">${dataUltima}</span></div>
                                         </div>
