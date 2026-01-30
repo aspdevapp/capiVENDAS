@@ -225,11 +225,11 @@
 </div>
 
 <script>
-    // LISTAS PADRÕES FIXAS (Já que o botão de config foi removido)
+    // LISTAS PADRÕES FIXAS
     const defaultSegments = ["AGRONEGOCIO", "ALIMENTACAO", "AUTOMOTIVOS E NAUTICO", "CALCADOS E ACESSORIOS", "ELETRONICOS", "ENTRETENIMENTO", "INSTITUICOES DE ENSINO", "JOALHERIA E BIJOUTERIAS", "MAGAZINES E LOJAS DEPARTAMENTOS", "MAQUINAS E PECAS", "MATERIAL CONSTRUCAO E ACABAMENTO", "MOVEIS E DECORACAO", "OTICA E RELOJOARIA", "PRODUTOS DIVERSOS", "SAUDE E ESTETICA", "SERVICOS DIVERSOS", "TURISMO", "VESTUARIO"];
     const defaultAlcadas = ["Selecione...", "Aprovado", "Alçada Regional", "Gerência Nacional de Negócios", "Diretor Nacional", "Vice - Presidência", "Presidência", "CAPI", "POC de Negócios", "Negado"];
     
-    // REGRAS DE NEGÓCIO (Mantidas intactas)
+    // REGRAS DE NEGÓCIO
     const faturamentoRules = {"MultiCheck":{"AGRONEGOCIO":270000,"ALIMENTACAO":1000000,"AUTOMOTIVOS E NAUTICO":1000000,"CALCADOS E ACESSORIOS":135000,"COMBUSTIVEIS":1000000,"ELETRONICOS":1000000,"ENTRETENIMENTO":1000000,"INSTITUICOES DE ENSINO":345000,"JOALHERIA E BIJOUTERIAS":135000,"MAGAZINES E LOJAS DEPARTAMENTOS":220000,"MAQUINAS E PECAS":270000,"MATERIAL CONSTRUCAO E ACABAMENTO":1000000,"MOVEIS E DECORACAO":270000,"OTICA E RELOJOARIA":135000,"PRODUTOS DIVERSOS":1000000,"SAUDE E ESTETICA":900000,"SERVICOS DIVERSOS":220000,"TURISMO":1000000,"VESTUARIO":220000},"MultiCrediário":{"AGRONEGOCIO":270000,"ALIMENTACAO":1000000,"AUTOMOTIVOS E NAUTICO":1000000,"CALCADOS E ACESSORIOS":220000,"COMBUSTIVEIS":1000000,"ELETRONICOS":570000,"ENTRETENIMENTO":1000000,"INSTITUICOES DE ENSINO":545000,"JOALHERIA E BIJOUTERIAS":185000,"MAGAZINES E LOJAS DEPARTAMENTOS":220000,"MAQUINAS E PECAS":270000,"MATERIAL CONSTRUCAO E ACABAMENTO":270000,"MOVEIS E DECORACAO":270000,"OTICA E RELOJOARIA":220000,"PRODUTOS DIVERSOS":1000000,"SAUDE E ESTETICA":220000,"SERVICOS DIVERSOS":220000,"TURISMO":1000000,"VESTUARIO":220000},"PayCheck":{"AGRONEGOCIO":270000,"ALIMENTACAO":1000000,"AUTOMOTIVOS E NAUTICO":1000000,"CALCADOS E ACESSORIOS":220000,"COMBUSTIVEIS":1000000,"ELETRONICOS":570000,"ENTRETENIMENTO":1000000,"INSTITUICOES DE ENSINO":545000,"JOALHERIA E BIJOUTERIAS":185000,"MAGAZINES E LOJAS DEPARTAMENTOS":220000,"MAQUINAS E PECAS":270000,"MATERIAL CONSTRUCAO E ACABAMENTO":270000,"MOVEIS E DECORACAO":270000,"OTICA E RELOJOARIA":220000,"PRODUTOS DIVERSOS":1000000,"SAUDE E ESTETICA":220000,"SERVICOS DIVERSOS":220000,"TURISMO":1000000,"VESTUARIO":220000}};
 
     function formatarMoedaInput(element) {
@@ -404,14 +404,52 @@
         if (dataAbertura <= dataLimite) { selectAlcada.value = "Aprovado"; selectAlcada.disabled = true; } else { selectAlcada.value = "CAPI"; selectAlcada.disabled = true; }
     }
 
+    // NOVA FUNÇÃO: Atualiza as opções do Select removendo "Aprovado" se valor > 0
+    function atualizarListaAlcadaTaxas(input, selectId) {
+        const val = limparValorMoeda(input.value);
+        const select = document.getElementById(selectId);
+        const valorAtual = select.value;
+
+        // Limpa opções atuais
+        select.innerHTML = ''; 
+        
+        defaultAlcadas.forEach(alc => { 
+            // REGRA SOLICITADA: Se valor > 0, não adiciona "Aprovado"
+            if (val > 0 && alc === "Aprovado") {
+                return; // Pula essa iteração
+            }
+            let opt = document.createElement('option'); 
+            opt.value = alc; 
+            opt.text = alc; 
+            select.appendChild(opt); 
+        });
+
+        // Tenta manter a seleção anterior, se ela ainda existir na nova lista
+        let optionExists = Array.from(select.options).some(o => o.value === valorAtual);
+        if(optionExists) { 
+            select.value = valorAtual; 
+        } else {
+            // Se a opção anterior sumiu (ex: era Aprovado e agora não pode ser), reseta
+            select.value = "Selecione...";
+        }
+    }
+
     function verificarTaxas() {
-        const taxaIP = limparValorMoeda(document.getElementById('inputTaxaIP').value);
-        const taxaFlat = limparValorMoeda(document.getElementById('inputTaxaFlat').value);
+        const inputIP = document.getElementById('inputTaxaIP');
+        const inputFlat = document.getElementById('inputTaxaFlat');
+        
+        // Atualiza as listas antes de verificar a defesa
+        atualizarListaAlcadaTaxas(inputIP, 'selAlcadaTaxaIP');
+        atualizarListaAlcadaTaxas(inputFlat, 'selAlcadaTaxaFlat');
+
+        const taxaIP = limparValorMoeda(inputIP.value);
+        const taxaFlat = limparValorMoeda(inputFlat.value);
         const divDefesa = document.getElementById('formDefesaTaxas');
         const tituloDefesa = document.getElementById('tituloDefesaTaxas');
         
-        verificarGenerico(document.getElementById('inputTaxaIP'));
-        verificarGenerico(document.getElementById('inputTaxaFlat'));
+        // Verifica o disable/enable padrão
+        verificarGenerico(inputIP);
+        verificarGenerico(inputFlat);
 
         if (taxaIP > 0 || taxaFlat > 0) {
             divDefesa.style.display = 'block';
@@ -434,6 +472,9 @@
 
     function populateAlcadas() {
         document.querySelectorAll('.sel-alcada').forEach(select => {
+            // Pula os selects de taxas pois são controlados dinamicamente
+            if(select.id === 'selAlcadaTaxaIP' || select.id === 'selAlcadaTaxaFlat') return;
+
             const valorAtual = select.value;
             select.innerHTML = ''; 
             defaultAlcadas.forEach(alc => { 
@@ -444,6 +485,19 @@
             });
             let optionExists = Array.from(select.options).some(o => o.value === valorAtual);
             if(optionExists) { select.value = valorAtual; }
+        });
+        
+        // Inicializa também as taxas com a lista completa (assumindo 0,00% inicial)
+        const initTaxaIP = document.getElementById('selAlcadaTaxaIP');
+        const initTaxaFlat = document.getElementById('selAlcadaTaxaFlat');
+        [initTaxaIP, initTaxaFlat].forEach(sel => {
+            if(sel) {
+                sel.innerHTML = '';
+                defaultAlcadas.forEach(alc => { 
+                    let opt = document.createElement('option'); opt.value = alc; opt.text = alc; sel.appendChild(opt); 
+                });
+                sel.value = "Aprovado";
+            }
         });
     }
 
